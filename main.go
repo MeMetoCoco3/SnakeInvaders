@@ -10,8 +10,7 @@ const (
 	SCREENHEIGHT
 )
 const (
-	PLAYER_MOVEMENT_SPEED = 2
-	MAX_PLAYER_SPEED      = 100
+	PLAYER_MOVEMENT_SPEED = 30
 )
 
 func main() {
@@ -30,10 +29,17 @@ func main() {
 		X: 200,
 		Y: 200,
 	}
-	player[movementID] = Movement{VelocityX: 0, VelocityY: 0, Speed: 500}
-	player[collidesID] = Collides{X: player[positionID].(Position).X, Y: player[positionID].(Position).Y, Width: 128, Height: 128}
+
+	player[movementID] = Movement{Direction: rl.Vector2{0, 0}, Speed: 500}
+	player[collidesID] = Collides{X: player[positionID].(Position).X, Y: player[positionID].(Position).Y, Width: 20, Height: 20}
 	player[playerControlledID] = PlayerControlled{}
 	player[spriteID] = Sprite{Width: 20, Height: 20, Color: rl.Lime}
+
+	candyGenerator := func() {
+		candy := make(map[ComponentID]any)
+		candy[candyID] = candyID
+	}()
+
 	border1 := make(map[ComponentID]any)
 	border2 := make(map[ComponentID]any)
 	border3 := make(map[ComponentID]any)

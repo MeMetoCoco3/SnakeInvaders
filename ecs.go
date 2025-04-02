@@ -21,6 +21,7 @@ const (
 	IAControlledID
 	collidesID
 	enemyID
+	candyID
 )
 
 const (
@@ -35,6 +36,13 @@ const (
 	JUMPFORCE      = 500
 	MOVEMENT_SPEED = 2
 )
+
+var DIRECTIONS = []rl.Vector2{
+	{0, -1},
+	{1, 0},
+	{0, 1},
+	{-1, 0},
+}
 
 type Component interface {
 	Type() ComponentID
@@ -72,8 +80,7 @@ func (c *Sprite) Draw(x, y float32) {
 
 // +++++++++++
 type Movement struct {
-	VelocityX float32
-	VelocityY float32
+	Direction rl.Vector2
 	Speed     float32
 }
 
@@ -167,7 +174,9 @@ func (c *Animation) AnimationFrame(numFramesPerRow, sizeTile, xPad, yPad, xOffse
 }
 
 // +++++++++++
-type PlayerControlled struct{}
+type PlayerControlled struct {
+	Body []rl.Vector2
+}
 
 func (c *PlayerControlled) Type() ComponentID { return playerControlledID }
 
@@ -190,6 +199,11 @@ func (c *Collides) Type() ComponentID { return collidesID }
 type Enemy struct{}
 
 func (c *Enemy) Type() ComponentID { return enemyID }
+
+// +++++++++++
+type Candy struct{}
+
+func (c *Candy) Type() ComponentID { return candyID }
 
 /*
 // +++++++++++
@@ -276,6 +290,9 @@ func (a *Archetype) AddEntity(entity Entity, components map[ComponentID]any) (id
 		case enemyID:
 			iaControlled := a.Components[k].([]Enemy)
 			a.Components[k] = append(iaControlled, v.(Enemy))
+		case candyID:
+			candy := a.Components[k].([]Candy)
+			a.Components[k] = append(candy, v.(Candy))
 		default:
 			continue
 		}
@@ -332,6 +349,10 @@ func (a *Archetype) RemoveEntity(entity Entity) {
 				components := v.([]Enemy)
 				components[idx] = components[lastIdx]
 				a.Components[k] = components[:lastIdx]
+			case candyID:
+				components := v.([]Candy)
+				components[idx] = components[lastIdx]
+				a.Components[k] = components[:lastIdx]
 			default:
 				continue
 			}
@@ -370,6 +391,9 @@ func (a *Archetype) RemoveEntity(entity Entity) {
 				a.Components[k] = components[:lastIdx]
 			case enemyID:
 				components := v.([]Enemy)
+				a.Components[k] = components[:lastIdx]
+			case candyID:
+				components := v.([]Candy)
 				a.Components[k] = components[:lastIdx]
 			default:
 				continue
@@ -517,6 +541,9 @@ func (w *World) RemoveComponent(entity Entity, component ComponentID) {
 		case enemyID:
 			component := v.([]Enemy)[idx]
 			components[k] = component
+		case candyID:
+			component := v.([]Candy)[idx]
+			components[k] = component
 		default:
 			continue
 		}
@@ -606,6 +633,7 @@ type MovementSystem struct {
 }
 
 func (s *MovementSystem) Update(dt float32) {
+
 	archetypes := s.World.Query(positionID, movementID, playerControlledID)
 	for archIdx := range archetypes {
 		entities := archetypes[archIdx].Entities
@@ -615,18 +643,19 @@ func (s *MovementSystem) Update(dt float32) {
 		}
 	}
 
-	archetypes = s.World.Query(positionID, movementID, IAControlledID)
 	/*
-		for archIdx := range archetypes {
-			entities := archetypes[archIdx].Entities
-				mover := archetypes[archIdx].Components[movementID].([]Movement)
+		archetypes = s.World.Query(positionID, movementID, IAControlledID)
+			for archIdx := range archetypes {
+				entities := archetypes[archIdx].Entities
+					mover := archetypes[archIdx].Components[movementID].([]Movement)
 
-				for _ := range entities {
-					// TODO: Define AI Behavior
-					 mover[idx].VelocityY = GRAVITY
-				}
-		}
+					for _ := range entities {
+						// TODO: Define AI Behavior
+						 mover[idx].VelocityY = GRAVITY
+					}
+			}
 	*/
+
 	archetypes = s.World.Query(positionID, movementID)
 	for archIdx := range archetypes {
 		entities := archetypes[archIdx].Entities
@@ -634,8 +663,8 @@ func (s *MovementSystem) Update(dt float32) {
 		mover := archetypes[archIdx].Components[movementID].([]Movement)
 		collider, itCollides := archetypes[archIdx].Components[collidesID].([]Collides)
 		for idx := range entities {
-			position[idx].X += mover[idx].VelocityX * dt
-			position[idx].Y += mover[idx].VelocityY * dt
+			position[idx].X += mover[idx].Direction.X * dt * PLAYER_MOVEMENT_SPEED
+			position[idx].Y += mover[idx].Direction.Y * dt * PLAYER_MOVEMENT_SPEED
 			if itCollides {
 				collider[idx].X = position[idx].X
 				collider[idx].Y = position[idx].Y
@@ -702,7 +731,7 @@ func (s *CollisionSystem) Update(dt float32) {
 			entitiesB := archetypes[j].Entities
 			positionB := archetypes[j].Components[positionID].([]Position)
 			colliderB := archetypes[j].Components[collidesID].([]Collides)
-
+			_, isCandyB := archetypes[j].Components[candyID].([]Candy)
 			for idxA := range entitiesA {
 				for idxB := range entitiesB {
 					if archetypes[i] == archetypes[j] && idxA == idxB {
@@ -738,8 +767,9 @@ func (s *CollisionSystem) Update(dt float32) {
 					case overlapC:
 						log.Printf("Full overlap point = %v\n", positionA)
 					default:
-						continue
-
+					}
+					if isCandyB {
+						archetypes[j].RemoveEntity(entitiesB[idxB])
 					}
 				}
 			}

@@ -1,16 +1,26 @@
 package main
 
 import (
-	"log"
-
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"golang.org/x/exp/constraints"
+	"math/rand"
 )
 
 var VICOLOR = rl.Color{252, 163, 17, 255}
 
 type Number interface {
 	constraints.Integer | constraints.Float
+}
+
+func CandyGenerator() map[ComponentID]any {
+	c := make(map[ComponentID]any)
+	c[candyID] = Candy{}
+	x := float32(rand.Intn(500) + 40)
+	y := float32(rand.Intn(500) + 40)
+	c[positionID] = Position{X: x, Y: y}
+	c[spriteID] = Sprite{Width: 20, Height: 20, Color: rl.Pink}
+	c[collidesID] = Collides{X: x, Y: y, Width: 20, Height: 20}
+	return c
 }
 
 func GetMaskFromComponents(componentsID ...ComponentID) ComponentID {
@@ -44,6 +54,9 @@ func GetArrayComponentsFromID(id ComponentID) any {
 		return make([]Collides, 0)
 	case enemyID:
 		return make([]Enemy, 0)
+	case candyID:
+		return make([]Candy, 0)
+
 	default:
 		return nil
 	}
@@ -72,49 +85,19 @@ func hasComponent(mask, componentsMask ComponentID) bool {
 }
 
 func GetInput(c Movement, dt float32) Movement {
-	var x float32
-	var y float32
-	if rl.IsKeyDown(rl.KeyLeft) {
-		log.Println("LEFT")
-		x = -1
-	} else if rl.IsKeyDown(rl.KeyRight) {
-		log.Println("RIGHT")
-		x = 1
-	}
+	CurrentDirection := c.Direction
 
-	if rl.IsKeyDown(rl.KeyUp) {
-		log.Println("UP")
-		y = -1
+	if rl.IsKeyDown(rl.KeyRight) {
+		CurrentDirection = DIRECTIONS[0]
 	} else if rl.IsKeyDown(rl.KeyDown) {
-		log.Println("DOWN")
-		y = 1
+		CurrentDirection = DIRECTIONS[1]
+	} else if rl.IsKeyDown(rl.KeyLeft) {
+		CurrentDirection = DIRECTIONS[2]
+	} else if rl.IsKeyDown(rl.KeyUp) {
+		CurrentDirection = DIRECTIONS[3]
 	}
 
-	if c.VelocityX != 0 && x == 0 {
-		log.Println("LERPING")
-		c.VelocityX = rl.Lerp(c.VelocityX, 0, 0.01)
-		if abs(c.VelocityX) < 1 {
-			c.VelocityX = 0
-		}
-	} else {
-		log.Println("GOINGGG")
-		xVelocity := c.VelocityX + x*PLAYER_MOVEMENT_SPEED
-		c.VelocityX = Clamp(xVelocity, -MAX_PLAYER_SPEED, MAX_PLAYER_SPEED)
-	}
-
-	if c.VelocityY != 0 && y == 0 {
-		log.Println("LERPING")
-		c.VelocityY = rl.Lerp(c.VelocityY, 0, 0.01)
-		if abs(c.VelocityY) < 1 {
-			c.VelocityY = 0
-		}
-	} else {
-		log.Println("GOINGGG")
-		yVelocity := c.VelocityY + y*PLAYER_MOVEMENT_SPEED
-		c.VelocityY = Clamp(yVelocity, -MAX_PLAYER_SPEED, MAX_PLAYER_SPEED)
-	}
-
-	log.Printf("VX: %f VY: %f\n", c.VelocityX, c.VelocityY)
+	c.Direction = CurrentDirection
 
 	return c
 }
