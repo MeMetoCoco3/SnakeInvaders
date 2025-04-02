@@ -10,7 +10,7 @@ const (
 	SCREENHEIGHT
 )
 const (
-	PLAYER_MOVEMENT_SPEED = 30
+	PLAYER_MOVEMENT_SPEED = 90
 )
 
 func main() {
@@ -18,6 +18,8 @@ func main() {
 
 	defer rl.CloseWindow()
 	world := NewWorld()
+	world.gameState.maxCandies = 5
+	world.gameState.currentCandies = 0
 	renderSys := *NewSystem(world, &DrawSystem{})
 	movementSys := *NewSystem(world, &MovementSystem{})
 	collisionSys := *NewSystem(world, &CollisionSystem{})
@@ -34,11 +36,6 @@ func main() {
 	player[collidesID] = Collides{X: player[positionID].(Position).X, Y: player[positionID].(Position).Y, Width: 20, Height: 20}
 	player[playerControlledID] = PlayerControlled{}
 	player[spriteID] = Sprite{Width: 20, Height: 20, Color: rl.Lime}
-
-	candyGenerator := func() {
-		candy := make(map[ComponentID]any)
-		candy[candyID] = candyID
-	}()
 
 	border1 := make(map[ComponentID]any)
 	border2 := make(map[ComponentID]any)
@@ -67,6 +64,13 @@ func main() {
 
 		movementSys.Update(dt)
 		collisionSys.Update(dt)
+		if world.gameState.currentCandies < world.gameState.maxCandies {
+			world.gameState.currentCandies += 1
+			log.Println("CANDY GENERATED")
+			c := CandyGenerator()
+			world.CreateEntity(c)
+		}
+
 		log.Println(world.nextEntityID)
 		rl.BeginDrawing()
 		rl.ClearBackground(VICOLOR)

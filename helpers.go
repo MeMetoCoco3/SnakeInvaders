@@ -18,8 +18,9 @@ func CandyGenerator() map[ComponentID]any {
 	x := float32(rand.Intn(500) + 40)
 	y := float32(rand.Intn(500) + 40)
 	c[positionID] = Position{X: x, Y: y}
-	c[spriteID] = Sprite{Width: 20, Height: 20, Color: rl.Pink}
+	c[spriteID] = Sprite{Width: 20, Height: 20, Color: rl.Blue}
 	c[collidesID] = Collides{X: x, Y: y, Width: 20, Height: 20}
+
 	return c
 }
 
@@ -87,13 +88,13 @@ func hasComponent(mask, componentsMask ComponentID) bool {
 func GetInput(c Movement, dt float32) Movement {
 	CurrentDirection := c.Direction
 
-	if rl.IsKeyDown(rl.KeyRight) {
+	if rl.IsKeyDown(rl.KeyUp) {
 		CurrentDirection = DIRECTIONS[0]
-	} else if rl.IsKeyDown(rl.KeyDown) {
+	} else if rl.IsKeyDown(rl.KeyRight) {
 		CurrentDirection = DIRECTIONS[1]
-	} else if rl.IsKeyDown(rl.KeyLeft) {
+	} else if rl.IsKeyDown(rl.KeyDown) {
 		CurrentDirection = DIRECTIONS[2]
-	} else if rl.IsKeyDown(rl.KeyUp) {
+	} else if rl.IsKeyDown(rl.KeyLeft) {
 		CurrentDirection = DIRECTIONS[3]
 	}
 

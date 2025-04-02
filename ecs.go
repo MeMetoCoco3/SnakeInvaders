@@ -302,6 +302,7 @@ func (a *Archetype) AddEntity(entity Entity, components map[ComponentID]any) (id
 }
 
 func (a *Archetype) RemoveEntity(entity Entity) {
+
 	idx, exists := a.EntityToIndex[entity]
 	if !exists || idx < 0 || idx >= len(a.Entities) {
 		return
@@ -327,6 +328,10 @@ func (a *Archetype) RemoveEntity(entity Entity) {
 				a.Components[k] = components[:lastIdx]
 			case movementID:
 				components := v.([]Movement)
+				components[idx] = components[lastIdx]
+				a.Components[k] = components[:lastIdx]
+			case collidesID:
+				components := v.([]Collides)
 				components[idx] = components[lastIdx]
 				a.Components[k] = components[:lastIdx]
 			case healthID:
@@ -404,10 +409,17 @@ func (a *Archetype) RemoveEntity(entity Entity) {
 	delete(a.EntityToIndex, entity)
 }
 
+// ===GAME STATE===
+type GameState struct {
+	maxCandies     int
+	currentCandies int
+}
+
 // ===WORLD===
 type World struct {
 	nextEntityID Entity
 	state        State
+	gameState    GameState
 	entityMask   map[Entity]ComponentID
 	archetypes   map[ComponentID]*Archetype
 }
@@ -416,6 +428,7 @@ func NewWorld() *World {
 	return &World{
 		nextEntityID: 0,
 		state:        PAUSE,
+		gameState:    GameState{0, 0},
 		entityMask:   make(map[Entity]ComponentID),
 		archetypes:   make(map[ComponentID]*Archetype),
 	}
@@ -737,6 +750,12 @@ func (s *CollisionSystem) Update(dt float32) {
 					if archetypes[i] == archetypes[j] && idxA == idxB {
 						continue
 					}
+					var deleteCandy = func(entity Entity) {
+						if isCandyB {
+							s.World.gameState.currentCandies--
+							archetypes[j].RemoveEntity(entity)
+						}
+					}
 					switch CheckRectCollision(positionA[idxA], colliderA[idxA], positionB[idxB], colliderB[idxB]) {
 					case noC:
 						continue
@@ -746,31 +765,32 @@ func (s *CollisionSystem) Update(dt float32) {
 							positionA[idxA].Y = positionB[idxB].Y - colliderA[idxA].Height
 							colliderA[idxA].Y = positionB[idxB].Y - colliderA[idxA].Height
 						}
+						deleteCandy(entitiesB[idxB])
 					case bottomC:
 						if isMovingA {
 							positionA[idxA].Y = positionB[idxB].Y + colliderB[idxB].Height
 							colliderA[idxA].Y = positionB[idxB].Y + colliderB[idxB].Height
-
 						}
+						deleteCandy(entitiesB[idxB])
 					case leftC:
 						if isMovingA {
 							log.Println("Left")
 							positionA[idxA].X = positionB[idxB].X - colliderA[idxA].Width
 							colliderA[idxA].X = positionB[idxB].X - colliderA[idxA].Width
 						}
+						deleteCandy(entitiesB[idxB])
 					case rightC:
 						if isMovingA {
 							log.Println("Right")
 							positionA[idxA].X = positionB[idxB].X + colliderB[idxB].Width
 							colliderA[idxA].X = positionB[idxB].X + colliderB[idxB].Width
 						}
+						deleteCandy(entitiesB[idxB])
 					case overlapC:
 						log.Printf("Full overlap point = %v\n", positionA)
 					default:
 					}
-					if isCandyB {
-						archetypes[j].RemoveEntity(entitiesB[idxB])
-					}
+
 				}
 			}
 		}
