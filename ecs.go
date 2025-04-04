@@ -684,6 +684,8 @@ func (s *MovementSystem) Update(dt float32) {
 			}
 		}
 	}
+
+	// TODO: DEFINE BODY MOVEMENT BEHAVIOR
 }
 
 // +++++++++++
@@ -724,6 +726,59 @@ func (s *DrawSystem) Update(dt float32) {
 			animation[idx].Draw(position[idx].X, position[idx].Y)
 		}
 	}
+
+	archetypes = s.World.Query(playerControlledID)
+	// Draw Body
+	for archIdx := range archetypes {
+		entities := archetypes[archIdx].Entities
+		player := archetypes[archIdx].Components[playerControlledID].([]PlayerControlled)
+		movement := archetypes[archIdx].Components[movementID].([]Movement)
+		for idx := range entities {
+			p := player[idx].Body
+			for i := range p {
+				if i == 0 {
+
+					rect := rl.Rectangle{p[i].X - movement[idx].Direction.X, p[i].Y - movement[idx].Direction.Y, RECTSIZE, RECTSIZE}
+					rl.DrawRectangleRec(rect, rl.Lime)
+					if len(p) == 1 {
+						continue
+					}
+					// rect = rl.Rectangle{p[idx].X, p[idx].Y, RECTSIZE, RECTSIZE}
+					// rl.DrawRectangleRec(rect, PLAYERCOLOR)
+					// continue
+				}
+				var dx float32
+				var dy float32
+				if p[idx].X == p[idx].X {
+					dx = 0
+					if p[idx].Y < p[idx].Y {
+						dy = 1
+					} else {
+						dy = -1
+					}
+				} else if p[idx].X > p[idx].X {
+					dx = -1
+					dy = 0
+				} else {
+					dx = 1
+					dy = 0
+				}
+				// p[idx].X + (dx * p.Frame), p[idx].Y + (dy * p.Frame),
+				// 	RECTSIZE, RECTSIZE,
+				// }
+
+				rect := rl.Rectangle{X: p[idx].X + dx, Y: p[idx].Y + dy, Width: RECTSIZE, Height: RECTSIZE}
+
+				// if i != len(p)-1 {
+				// 	rect = rl.Rectangle{
+				// 		p[idx].X, p[idx].Y,
+				// 		RECTSIZE, RECTSIZE,
+				// 	}
+				rl.DrawRectangleRec(rect, VICOLOR)
+			}
+
+		}
+	}
 }
 
 // +++++++++++
@@ -738,20 +793,23 @@ func (s *CollisionSystem) Update(dt float32) {
 		entitiesA := archetypes[i].Entities
 		positionA := archetypes[i].Components[positionID].([]Position)
 		colliderA := archetypes[i].Components[collidesID].([]Collides)
-
+		player, isPlayerA := archetypes[i].Components[playerControlledID].([]PlayerControlled)
 		_, isMovingA := archetypes[i].Components[movementID].([]Movement)
 		for j := range archetypes {
 			entitiesB := archetypes[j].Entities
 			positionB := archetypes[j].Components[positionID].([]Position)
 			colliderB := archetypes[j].Components[collidesID].([]Collides)
 			_, isCandyB := archetypes[j].Components[candyID].([]Candy)
+
 			for idxA := range entitiesA {
 				for idxB := range entitiesB {
 					if archetypes[i] == archetypes[j] && idxA == idxB {
 						continue
 					}
 					var deleteCandy = func(entity Entity) {
-						if isCandyB {
+						if isCandyB && isPlayerA {
+							player[idxA].GrowBody(player[idxA].Body)
+							log.Printf("GROW BODY:%d\n", len(player[idxA].Body))
 							s.World.gameState.currentCandies--
 							archetypes[j].RemoveEntity(entity)
 						}

@@ -34,7 +34,9 @@ func main() {
 
 	player[movementID] = Movement{Direction: rl.Vector2{0, 0}, Speed: 500}
 	player[collidesID] = Collides{X: player[positionID].(Position).X, Y: player[positionID].(Position).Y, Width: 20, Height: 20}
-	player[playerControlledID] = PlayerControlled{}
+	player[playerControlledID] = PlayerControlled{Body: []rl.Vector2{
+		{X: 200, Y: 200}},
+	}
 	player[spriteID] = Sprite{Width: 20, Height: 20, Color: rl.Lime}
 
 	border1 := make(map[ComponentID]any)
