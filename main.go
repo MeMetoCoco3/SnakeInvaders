@@ -15,29 +15,38 @@ const (
 
 func main() {
 	rl.InitWindow(SCREENWIDTH, SCREENHEIGHT, "Snake")
-
+	rl.InitAudioDevice()
 	defer rl.CloseWindow()
+	defer rl.CloseAudioDevice()
+
 	world := NewWorld()
 	world.gameState.maxCandies = 5
 	world.gameState.currentCandies = 0
 	renderSys := *NewSystem(world, &DrawSystem{})
 	movementSys := *NewSystem(world, &MovementSystem{})
 	collisionSys := *NewSystem(world, &CollisionSystem{})
-	// pjTexture := rl.LoadTexture("assets/player/fishy.png")
-	// defer rl.UnloadTexture(pjTexture)
-
+	audioSys := *NewSystem(world, &AudioSystem{})
 	player := make(map[ComponentID]any)
-	player[positionID] = Position{
-		X: 200,
-		Y: 200,
+
+	// player[positionID] = Position{
+	// 	X: 200,
+	// 	Y: 200,
+	// }
+
+	player[movementID] = Movement{Direction: rl.Vector2{0, 0}, Speed: 500, Timer: COUNT_FOR_TURN}
+	player[playerControlledID] = PlayerControlled{
+		Body: []Cell{
+			{Position: rl.Vector2{X: 200, Y: 200}, Direction: rl.Vector2{1, 0}},
+		},
 	}
 
-	player[movementID] = Movement{Direction: rl.Vector2{0, 0}, Speed: 500}
-	player[collidesID] = Collides{X: player[positionID].(Position).X, Y: player[positionID].(Position).Y, Width: 20, Height: 20}
-	player[playerControlledID] = PlayerControlled{Body: []rl.Vector2{
-		{X: 200, Y: 200}},
+	player[collidesID] = Collides{
+		X:     player[playerControlledID].(PlayerControlled).Body[0].Position.X,
+		Y:     player[playerControlledID].(PlayerControlled).Body[0].Position.Y,
+		Width: 20, Height: 20,
 	}
-	player[spriteID] = Sprite{Width: 20, Height: 20, Color: rl.Lime}
+
+	player[spriteID] = Sprite{Width: RECTSIZE, Height: RECTSIZE, Color: rl.Lime}
 
 	border1 := make(map[ComponentID]any)
 	border2 := make(map[ComponentID]any)
@@ -60,10 +69,10 @@ func main() {
 	world.CreateEntity(border2)
 	world.CreateEntity(border3)
 	world.CreateEntity(border4)
-	//
+
 	for !rl.WindowShouldClose() {
 		dt := rl.GetFrameTime()
-
+		audioSys.Update(dt)
 		movementSys.Update(dt)
 		collisionSys.Update(dt)
 		if world.gameState.currentCandies < world.gameState.maxCandies {
@@ -72,8 +81,7 @@ func main() {
 			c := CandyGenerator()
 			world.CreateEntity(c)
 		}
-
-		log.Println(world.nextEntityID)
+		log.Println(len(player[playerControlledID].(PlayerControlled).Body))
 		rl.BeginDrawing()
 		rl.ClearBackground(VICOLOR)
 		renderSys.Update(dt)

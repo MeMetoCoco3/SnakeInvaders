@@ -85,7 +85,7 @@ func hasComponent(mask, componentsMask ComponentID) bool {
 	return result
 }
 
-func GetInput(c Movement, dt float32) Movement {
+func GetDirection(c Movement, dt float32) Movement {
 	CurrentDirection := c.Direction
 
 	if rl.IsKeyDown(rl.KeyUp) {
@@ -191,6 +191,13 @@ func convertToRectangle(v Collides) rl.Rectangle {
 		Height: v.Height,
 	}
 
+}
+
+func sign[T Number](a T) T {
+	if a < 0 {
+		return a - a - 1
+	}
+	return 1
 }
 
 func abs[T Number](a T) T {

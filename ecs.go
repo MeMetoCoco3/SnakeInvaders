@@ -82,6 +82,7 @@ func (c *Sprite) Draw(x, y float32) {
 type Movement struct {
 	Direction rl.Vector2
 	Speed     float32
+	Timer     int
 }
 
 func (c *Movement) Type() ComponentID {
@@ -174,8 +175,12 @@ func (c *Animation) AnimationFrame(numFramesPerRow, sizeTile, xPad, yPad, xOffse
 }
 
 // +++++++++++
+type Cell struct {
+	Position  rl.Vector2
+	Direction rl.Vector2
+}
 type PlayerControlled struct {
-	Body []rl.Vector2
+	Body []Cell
 }
 
 func (c *PlayerControlled) Type() ComponentID { return playerControlledID }
@@ -422,6 +427,7 @@ type World struct {
 	gameState    GameState
 	entityMask   map[Entity]ComponentID
 	archetypes   map[ComponentID]*Archetype
+	audioPull    []rl.Sound
 }
 
 func NewWorld() *World {
@@ -647,12 +653,18 @@ type MovementSystem struct {
 
 func (s *MovementSystem) Update(dt float32) {
 
-	archetypes := s.World.Query(positionID, movementID, playerControlledID)
+	archetypes := s.World.Query(movementID, playerControlledID)
 	for archIdx := range archetypes {
 		entities := archetypes[archIdx].Entities
 		mover := archetypes[archIdx].Components[movementID].([]Movement)
+
 		for idx := range entities {
-			mover[idx] = GetInput(mover[idx], dt)
+			mover[idx].Timer += 1
+			if mover[idx].Timer >= COUNT_FOR_TURN {
+				mover[idx].Timer = 0
+				mover[idx] = GetDirection(mover[idx], dt)
+				continue
+			}
 		}
 	}
 
@@ -669,23 +681,92 @@ func (s *MovementSystem) Update(dt float32) {
 			}
 	*/
 
-	archetypes = s.World.Query(positionID, movementID)
+	archetypes = s.World.Query(movementID)
 	for archIdx := range archetypes {
 		entities := archetypes[archIdx].Entities
-		position := archetypes[archIdx].Components[positionID].([]Position)
+		position, _ := archetypes[archIdx].Components[positionID].([]Position)
 		mover := archetypes[archIdx].Components[movementID].([]Movement)
 		collider, itCollides := archetypes[archIdx].Components[collidesID].([]Collides)
-		for idx := range entities {
-			position[idx].X += mover[idx].Direction.X * dt * PLAYER_MOVEMENT_SPEED
-			position[idx].Y += mover[idx].Direction.Y * dt * PLAYER_MOVEMENT_SPEED
+		player, isPlayer := archetypes[archIdx].Components[playerControlledID].([]PlayerControlled)
+
+		// Moving Body
+		if isPlayer {
+			body := player[archIdx].Body
+
+			prevPositions := make([]rl.Vector2, len(body))
+			for i := range body {
+				prevPositions[i] = body[i].Position
+			}
+			//Move Head
+			log.Println(mover[0].Direction)
+			body[0].Direction.X = mover[0].Direction.X
+			body[0].Direction.Y = mover[0].Direction.Y
+
+			direction := rl.Vector2{
+				X: mover[0].Direction.X * dt * PLAYER_MOVEMENT_SPEED,
+				Y: mover[0].Direction.Y * dt * PLAYER_MOVEMENT_SPEED,
+			}
+
+			body[0].Position = rl.Vector2Add(body[0].Position, direction)
+
 			if itCollides {
-				collider[idx].X = position[idx].X
-				collider[idx].Y = position[idx].Y
+				collider[0].X = body[0].Position.X
+				collider[0].Y = body[0].Position.Y
+			}
+
+			const epsilon = RECTSIZE
+			prevState := body
+			for i := 1; i < len(body); i++ {
+				prevPos := prevState[i-1].Position
+				currentPos := prevState[i].Position
+				prevDir := prevState[i-1].Direction
+				currentDir := prevState[i].Direction
+
+				diffX := prevPos.X - currentPos.X
+				diffY := prevPos.Y - currentPos.Y
+				if abs(diffX) > epsilon && prevDir != currentDir {
+					body[i].Direction = prevDir
+					// if diffX > 0 {
+					body[i].Position = rl.Vector2{X: prevPos.X - RECTSIZE, Y: prevPos.Y}
+					// continue
+					// }else{
+					// body[i].Position = rl.Vector2{X: prevPos.X + RECTSIZE, Y: prevPos.Y + RECTSIZE}
+					// }
+					continue
+				} else if abs(diffY) > epsilon && prevDir != currentDir {
+					body[i].Direction = prevDir
+					body[i].Position = rl.Vector2{X: prevPos.X, Y: prevPos.Y + RECTSIZE}
+					continue
+				}
+
+				direction := rl.Vector2{
+					X: body[i].Direction.X * dt * PLAYER_MOVEMENT_SPEED,
+					Y: body[i].Direction.Y * dt * PLAYER_MOVEMENT_SPEED,
+				}
+
+				body[i].Position = rl.Vector2Add(body[i].Position, direction)
+				log.Println(body[i].Direction)
+				log.Println(diffX, diffY)
+				log.Println("$$")
+				// Update collider if needed
+				if itCollides && i < len(collider) {
+					collider[i].X = body[i].Position.X
+					collider[i].Y = body[i].Position.Y
+				}
+			}
+		} else {
+
+			for idx := range entities {
+
+				position[idx].X += mover[idx].Direction.X * dt * PLAYER_MOVEMENT_SPEED
+				position[idx].Y += mover[idx].Direction.Y * dt * PLAYER_MOVEMENT_SPEED
+				if itCollides {
+					collider[idx].X = position[idx].X
+					collider[idx].Y = position[idx].Y
+				}
 			}
 		}
 	}
-
-	// TODO: DEFINE BODY MOVEMENT BEHAVIOR
 }
 
 // +++++++++++
@@ -727,56 +808,17 @@ func (s *DrawSystem) Update(dt float32) {
 		}
 	}
 
-	archetypes = s.World.Query(playerControlledID)
 	// Draw Body
+	archetypes = s.World.Query(playerControlledID)
 	for archIdx := range archetypes {
 		entities := archetypes[archIdx].Entities
 		player := archetypes[archIdx].Components[playerControlledID].([]PlayerControlled)
-		movement := archetypes[archIdx].Components[movementID].([]Movement)
 		for idx := range entities {
 			p := player[idx].Body
 			for i := range p {
-				if i == 0 {
-
-					rect := rl.Rectangle{p[i].X - movement[idx].Direction.X, p[i].Y - movement[idx].Direction.Y, RECTSIZE, RECTSIZE}
-					rl.DrawRectangleRec(rect, rl.Lime)
-					if len(p) == 1 {
-						continue
-					}
-					// rect = rl.Rectangle{p[idx].X, p[idx].Y, RECTSIZE, RECTSIZE}
-					// rl.DrawRectangleRec(rect, PLAYERCOLOR)
-					// continue
-				}
-				var dx float32
-				var dy float32
-				if p[idx].X == p[idx].X {
-					dx = 0
-					if p[idx].Y < p[idx].Y {
-						dy = 1
-					} else {
-						dy = -1
-					}
-				} else if p[idx].X > p[idx].X {
-					dx = -1
-					dy = 0
-				} else {
-					dx = 1
-					dy = 0
-				}
-				// p[idx].X + (dx * p.Frame), p[idx].Y + (dy * p.Frame),
-				// 	RECTSIZE, RECTSIZE,
-				// }
-
-				rect := rl.Rectangle{X: p[idx].X + dx, Y: p[idx].Y + dy, Width: RECTSIZE, Height: RECTSIZE}
-
-				// if i != len(p)-1 {
-				// 	rect = rl.Rectangle{
-				// 		p[idx].X, p[idx].Y,
-				// 		RECTSIZE, RECTSIZE,
-				// 	}
-				rl.DrawRectangleRec(rect, VICOLOR)
+				rect := rl.Rectangle{p[i].Position.X, p[i].Position.Y, RECTSIZE, RECTSIZE}
+				rl.DrawRectangleRec(rect, rl.Lime)
 			}
-
 		}
 	}
 }
@@ -787,70 +829,88 @@ type CollisionSystem struct {
 }
 
 func (s *CollisionSystem) Update(dt float32) {
-	log.Println("CollisionSystem called")
 	archetypes := s.World.Query(positionID, collidesID)
-	for i := range archetypes {
-		entitiesA := archetypes[i].Entities
-		positionA := archetypes[i].Components[positionID].([]Position)
-		colliderA := archetypes[i].Components[collidesID].([]Collides)
-		player, isPlayerA := archetypes[i].Components[playerControlledID].([]PlayerControlled)
-		_, isMovingA := archetypes[i].Components[movementID].([]Movement)
+	playerArchetype := s.World.Query(playerControlledID)
+	for i := range playerArchetype {
+		// We will check all collisions, but in A we will keep track of the player and on B
+		// we will keep track of other things, like candy or enemies.
+		entitiesA := playerArchetype[i].Entities
+		playerA := playerArchetype[i].Components[playerControlledID].([]PlayerControlled)
+
 		for j := range archetypes {
 			entitiesB := archetypes[j].Entities
 			positionB := archetypes[j].Components[positionID].([]Position)
 			colliderB := archetypes[j].Components[collidesID].([]Collides)
 			_, isCandyB := archetypes[j].Components[candyID].([]Candy)
-
+			// enemy, isEnemyB := archetypes[j].Components[enemyID].([]Enemy)
 			for idxA := range entitiesA {
 				for idxB := range entitiesB {
-					if archetypes[i] == archetypes[j] && idxA == idxB {
-						continue
-					}
-					var deleteCandy = func(entity Entity) {
-						if isCandyB && isPlayerA {
-							player[idxA].GrowBody(player[idxA].Body)
-							log.Printf("GROW BODY:%d\n", len(player[idxA].Body))
+
+					if isCandyB {
+						var deleteCandy = func(entity Entity) {
+							// Take out this shit from here.
+							fxBite := rl.LoadSound("assets/pickupCoin.wav")
+							playerA[idxA].GrowBody(playerA[idxA].Body)
+							log.Printf("GROW BODY:%d\n", len(playerA[idxA].Body))
 							s.World.gameState.currentCandies--
 							archetypes[j].RemoveEntity(entity)
+							s.World.audioPull = append(s.World.audioPull, fxBite)
 						}
-					}
-					switch CheckRectCollision(positionA[idxA], colliderA[idxA], positionB[idxB], colliderB[idxB]) {
-					case noC:
-						continue
-					case topC:
-						if isMovingA {
-							log.Println("Bottom")
-							positionA[idxA].Y = positionB[idxB].Y - colliderA[idxA].Height
-							colliderA[idxA].Y = positionB[idxB].Y - colliderA[idxA].Height
-						}
-						deleteCandy(entitiesB[idxB])
-					case bottomC:
-						if isMovingA {
-							positionA[idxA].Y = positionB[idxB].Y + colliderB[idxB].Height
-							colliderA[idxA].Y = positionB[idxB].Y + colliderB[idxB].Height
-						}
-						deleteCandy(entitiesB[idxB])
-					case leftC:
-						if isMovingA {
-							log.Println("Left")
-							positionA[idxA].X = positionB[idxB].X - colliderA[idxA].Width
-							colliderA[idxA].X = positionB[idxB].X - colliderA[idxA].Width
-						}
-						deleteCandy(entitiesB[idxB])
-					case rightC:
-						if isMovingA {
-							log.Println("Right")
-							positionA[idxA].X = positionB[idxB].X + colliderB[idxB].Width
-							colliderA[idxA].X = positionB[idxB].X + colliderB[idxB].Width
-						}
-						deleteCandy(entitiesB[idxB])
-					case overlapC:
-						log.Printf("Full overlap point = %v\n", positionA)
-					default:
-					}
 
+						playerPosition := Position{X: playerA[idxA].Body[0].Position.X, Y: playerA[idxA].Body[0].Position.Y}
+						playerCollide := Collides{X: playerA[idxA].Body[0].Position.X, Y: playerA[idxA].Body[0].Position.Y, Width: RECTSIZE, Height: RECTSIZE}
+						switch CheckRectCollision(playerPosition, playerCollide, positionB[idxB], colliderB[idxB]) {
+						case noC:
+							continue
+						case topC:
+							log.Println("Bottom")
+							// positionA[idxA].Y = positionB[idxB].Y - colliderA[idxA].Height
+							// colliderA[idxA].Y = positionB[idxB].Y - colliderA[idxA].Height
+							deleteCandy(entitiesB[idxB])
+						case bottomC:
+							log.Println("Top")
+							// positionA[idxA].Y = positionB[idxB].Y + colliderB[idxB].Height
+							// colliderA[idxA].Y = positionB[idxB].Y + colliderB[idxB].Height
+							deleteCandy(entitiesB[idxB])
+						case leftC:
+							log.Println("Left")
+							// positionA[idxA].X = positionB[idxB].X - colliderA[idxA].Width
+							// colliderA[idxA].X = positionB[idxB].X - colliderA[idxA].Width
+							deleteCandy(entitiesB[idxB])
+						case rightC:
+							log.Println("Right")
+							// positionA[idxA].X = positionB[idxB].X + colliderB[idxB].Width
+							// colliderA[idxA].X = positionB[idxB].X + colliderB[idxB].Width
+							deleteCandy(entitiesB[idxB])
+						case overlapC:
+							// log.Printf("Full overlap point = %v\n", positionA)
+						default:
+						}
+					}
 				}
 			}
 		}
 	}
+}
+
+type AudioSystem struct {
+	BaseSystem
+	BgMusic rl.Music
+}
+
+func (s *AudioSystem) Update(dt float32) {
+
+	if len(s.World.audioPull) > 0 {
+		fx := s.PullSound()
+		rl.PlaySound(fx)
+	}
+}
+func (s *AudioSystem) PullSound() rl.Sound {
+	pulled := s.World.audioPull[0]
+	s.World.audioPull = s.World.audioPull[1:]
+	return pulled
+}
+
+func (s *AudioSystem) PushSound(fx rl.Sound) {
+	s.World.audioPull = append(s.World.audioPull, fx)
 }
